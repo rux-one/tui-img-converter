@@ -330,6 +330,23 @@
       tui border frame
     </label>
 
+    <label>border color
+      <select id="borderColor">
+        <option value="#3a5a3a">terminal green</option>
+        <option value="#39ff14">phosphor green</option>
+        <option value="#5a3a5a">synthwave purple</option>
+        <option value="#ff00ff">hot magenta</option>
+        <option value="#3a3a5a">midnight blue</option>
+        <option value="#00e5ff">cyan glow</option>
+        <option value="#5a4a2a">amber crt</option>
+        <option value="#ffab00">warm amber</option>
+        <option value="#5a2a2a">crimson dim</option>
+        <option value="#ff3333">red alert</option>
+        <option value="#4a4a4a">slate grey</option>
+        <option value="#b0bec5">silver</option>
+      </select>
+    </label>
+
     <label class="toggle">
       <input type="checkbox" id="scanlines">
       <span class="sw"></span>
@@ -585,7 +602,7 @@ function exportPng() {
     if (fg && fg !== bg) { ox.fillStyle = fg; ox.fillRect(x, y, cellW, cellH / 2); }
   };
 
-  const borderColor = '#3a5a3a';
+  const borderColor = lastRender.borderHex || '#3a5a3a';
   if (useBorder) {
     for (let c = 0; c < totalCols; c++) {
       ox.fillStyle = borderColor;
@@ -641,7 +658,7 @@ function exportPng() {
 }
 
 // Controls re-render
-['mode','width','palette','dither','border','scanlines','showFilename','filename'].forEach(id => {
+['mode','width','palette','dither','border','borderColor','scanlines','showFilename','filename'].forEach(id => {
   $(id).addEventListener('change', () => render());
   $(id).addEventListener('input', () => { clearTimeout($(id)._t); $(id)._t = setTimeout(render, 200); });
 });
@@ -807,8 +824,9 @@ function render() {
   };
 
   // Border classes (reserved)
-  const borderFgCls = useBorder ? getFgClass('#3a5a3a') : '';
-  const filenameFgCls = (useBorder && showFn) ? getFgClass('#39ff14') : '';
+  const borderHex = $('borderColor').value;
+  const borderFgCls = useBorder ? getFgClass(borderHex) : '';
+  const filenameFgCls = (useBorder && showFn) ? getFgClass(brighten(borderHex)) : '';
 
   // ── Convert cellRows to RLE-compressed span lines ──
   // Each span: {classes, chars} where chars can be multiple identical or
@@ -871,7 +889,7 @@ function render() {
   for (const [hex, idx] of fgMap) css += `.f${idx}{color:${hex}}`;
   for (const [hex, idx] of bgMap) css += `.g${idx}{background:${hex}}`;
 
-  lastRender = { cellRows, mode, pixW, pixH, useBorder, useScanlines, showFn, fname };
+  lastRender = { cellRows, mode, pixW, pixH, useBorder, useScanlines, showFn, fname, borderHex };
 
   const linesHtml = lines.join('\n');
 
@@ -902,6 +920,13 @@ function render() {
     : bytes < 1048576 ? (bytes / 1024).toFixed(1) + ' KB'
     : (bytes / 1048576).toFixed(2) + ' MB';
   $('fileSize').textContent = sizeStr;
+}
+
+function brighten(hex) {
+  const r = Math.min(255, parseInt(hex.slice(1,3),16) + 100);
+  const g = Math.min(255, parseInt(hex.slice(3,5),16) + 100);
+  const b = Math.min(255, parseInt(hex.slice(5,7),16) + 100);
+  return '#' + ((1<<24)|(r<<16)|(g<<8)|b).toString(16).slice(1);
 }
 
 function escapeHtml(str) {
