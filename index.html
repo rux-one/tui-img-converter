@@ -403,7 +403,7 @@
 
 <canvas id="canvas"></canvas>
 
-<script>
+<script type="module">
 // ─── ANSI Palettes ───────────────────────────────────────────
 const ANSI16 = [
   [0,0,0],[128,0,0],[0,128,0],[128,128,0],[0,0,128],[128,0,128],[0,128,128],[192,192,192],
@@ -647,13 +647,34 @@ function exportPng() {
     }
   }
 
-  oc.toBlob(blob => {
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = (lastRender.fname || 'tui-image').replace(/\.[^.]+$/, '') + '-tui.png';
-    a.click();
-    URL.revokeObjectURL(url);
+  const btn = $('exportPng');
+  btn.textContent = '⏳ optimising…';
+  btn.disabled = true;
+
+  oc.toBlob(async blob => {
+    try {
+      const { optimise } = await import('./oxipng.js');
+      const raw = await blob.arrayBuffer();
+      const optimised = await optimise(raw, 4);
+      const outBlob = new Blob([optimised], { type: 'image/png' });
+      const url = URL.createObjectURL(outBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (lastRender.fname || 'tui-image').replace(/\.[^.]+$/, '') + '-tui.png';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.warn('OxiPNG failed, falling back to raw PNG:', e);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = (lastRender.fname || 'tui-image').replace(/\.[^.]+$/, '') + '-tui.png';
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      btn.textContent = '⤓ export png';
+      btn.disabled = false;
+    }
   }, 'image/png');
 }
 

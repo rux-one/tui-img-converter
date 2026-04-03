@@ -25,7 +25,7 @@ Floyd-Steinberg dithering is applied automatically when using limited palettes.
 ## options
 
 - adjustable output width
-- TUI-style border frame
+- TUI-style border frame with selectable retro colors
 - CRT scanline overlay
 - filename label
 - snippet size indicator
@@ -33,6 +33,10 @@ Floyd-Steinberg dithering is applied automatically when using limited palettes.
 ## output
 
 The generated HTML snippet uses CSS class indexing and hex colors to keep file size small. Consecutive identical spans are merged via run-length encoding. Copy the snippet with one click and paste it into any HTML page.
+
+## png export
+
+Images can also be exported as PNG. The converter draws pixel-perfect colored rectangles onto an offscreen canvas, matching the cell layout of the text output. Exported PNGs are compressed using OxiPNG (level 4) via a WebAssembly build loaded on demand from CDN. No server-side processing — the entire optimization runs in the browser.
 
 ## usage
 
