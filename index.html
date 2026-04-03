@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tui-img converter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0e14;
+    --panel: #111820;
+    --border: #1e2a38;
+    --text: #b0bec5;
+    --accent: #39ff14;
+    --accent-dim: #1a7a0a;
+    --cyan: #00e5ff;
+    --amber: #ffab00;
+    --white: #eceff1;
+  }
+
+  body {
+    font-family: 'JetBrains Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 1rem;
+  }
+
+  h1 {
+    color: var(--accent);
+    font-size: 1.1rem;
+    margin-bottom: 1rem;
+    text-transform: lowercase;
+    letter-spacing: 0.1em;
+  }
+  h1 span { color: var(--text); }
+
+  .app {
+    display: grid;
+    grid-template-columns: 260px 1fr;
+    gap: 1rem;
+    width: 100%;
+    max-width: 1200px;
+  }
+
+  /* --- Sidebar --- */
+  .sidebar {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    max-height: calc(100vh - 5rem);
+    overflow-y: auto;
+  }
+
+  .sidebar label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    font-size: 0.7rem;
+    color: var(--accent);
+    text-transform: lowercase;
+  }
+
+  .sidebar select,
+  .sidebar input[type="number"],
+  .sidebar input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: 3px;
+    outline: none;
+  }
+  .sidebar select:focus,
+  .sidebar input:focus {
+    border-color: var(--accent);
+  }
+
+  .sidebar .toggle {
+    flex-direction: row;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+    user-select: none;
+  }
+  .sidebar .toggle input { display: none; }
+  .sidebar .toggle .sw {
+    width: 28px; height: 14px;
+    background: var(--border);
+    border-radius: 7px;
+    position: relative;
+    transition: background 0.2s;
+    flex-shrink: 0;
+  }
+  .sidebar .toggle .sw::after {
+    content: '';
+    width: 10px; height: 10px;
+    background: var(--text);
+    border-radius: 50%;
+    position: absolute;
+    top: 2px; left: 2px;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .sidebar .toggle input:checked + .sw {
+    background: var(--accent-dim);
+  }
+  .sidebar .toggle input:checked + .sw::after {
+    transform: translateX(14px);
+    background: var(--accent);
+  }
+
+  .sidebar hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 0.2rem 0;
+  }
+
+  /* --- Main area --- */
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+    min-width: 0;
+  }
+
+  /* Drop zone */
+  .dropzone {
+    border: 2px dashed var(--border);
+    border-radius: 4px;
+    padding: 2rem;
+    text-align: center;
+    font-size: 0.8rem;
+    color: var(--text);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .dropzone.over {
+    border-color: var(--accent);
+    background: rgba(57,255,20,0.04);
+  }
+  .dropzone input { display: none; }
+  .dropzone .hint { color: #556; font-size: 0.7rem; margin-top: 0.3rem; }
+  .dropzone.has-image { padding: 0.5rem; }
+  .dropzone.has-image .placeholder { display: none; }
+  .dropzone .loaded-info {
+    display: none;
+    font-size: 0.7rem;
+    color: var(--accent);
+  }
+  .dropzone.has-image .loaded-info { display: block; }
+
+  /* Tabs */
+  .tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tab-btn {
+    background: none;
+    border: none;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 0.5rem 1rem;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: color 0.2s, border-color 0.2s;
+  }
+  .tab-btn:hover { color: var(--white); }
+  .tab-btn.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* Preview & output */
+  .output-area {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    min-height: 300px;
+    flex: 1;
+    position: relative;
+    overflow: auto;
+  }
+
+  .tab-content { display: none; padding: 0; height: 100%; }
+  .tab-content.active { display: block; }
+
+  #previewWrap {
+    overflow: auto;
+    padding: 1rem;
+    height: 100%;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  #preview {
+    line-height: 1;
+    font-size: 8px;
+    white-space: pre;
+    font-family: 'JetBrains Mono', monospace;
+    letter-spacing: 0;
+  }
+
+  #snippetWrap {
+    padding: 1rem;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #snippet {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 0.65rem;
+    padding: 0.75rem;
+    border-radius: 3px;
+    resize: none;
+    outline: none;
+    white-space: pre;
+    overflow: auto;
+  }
+
+  #snippetWrap {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .snippet-footer {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+  }
+
+  .file-size {
+    font-size: 0.7rem;
+    color: var(--amber);
+    opacity: 0.85;
+  }
+
+  .copy-btn {
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    font-family: inherit;
+    font-size: 0.75rem;
+    padding: 0.45rem 1rem;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .copy-btn:hover { background: rgba(57,255,20,0.15); }
+
+  .empty-state {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #334;
+    font-size: 0.8rem;
+    padding: 2rem;
+    text-align: center;
+  }
+
+  canvas { display: none; }
+</style>
+</head>
+<body>
+
+<h1>┌ tui-img <span>converter</span> ┐</h1>
+
+<div class="app">
+  <!-- Sidebar controls -->
+  <aside class="sidebar">
+    <label>render mode
+      <select id="mode">
+        <option value="halfblock">▄▀ half-block</option>
+        <option value="braille">⣿ braille</option>
+        <option value="ascii">Aa ascii chars</option>
+        <option value="block">░▒▓█ block shading</option>
+      </select>
+    </label>
+
+    <label>width (chars)
+      <input type="number" id="width" value="80" min="10" max="300">
+    </label>
+
+    <label>color palette
+      <select id="palette">
+        <option value="truecolor">true color (24-bit)</option>
+        <option value="ansi256">ansi 256</option>
+        <option value="ansi16">ansi 16</option>
+        <option value="mono-green">mono — green</option>
+        <option value="mono-amber">mono — amber</option>
+        <option value="mono-cyan">mono — cyan</option>
+        <option value="mono-white">mono — white</option>
+      </select>
+    </label>
+
+    <hr>
+
+    <label class="toggle">
+      <input type="checkbox" id="dither">
+      <span class="sw"></span>
+      floyd-steinberg dithering
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="border" checked>
+      <span class="sw"></span>
+      tui border frame
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="scanlines">
+      <span class="sw"></span>
+      crt scanline overlay
+    </label>
+
+    <label class="toggle">
+      <input type="checkbox" id="showFilename" checked>
+      <span class="sw"></span>
+      show filename
+    </label>
+
+    <hr>
+
+    <label>filename
+      <input type="text" id="filename" value="image.png">
+    </label>
+  </aside>
+
+  <!-- Main area -->
+  <div class="main">
+    <div class="dropzone" id="dropzone">
+      <div class="placeholder">drop PNG / JPG / WebP here — or click to browse</div>
+      <div class="hint">supports any browser-readable image</div>
+      <div class="loaded-info" id="loadedInfo"></div>
+      <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp">
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="preview">preview</button>
+      <button class="tab-btn" data-tab="snippet">html snippet</button>
+    </div>
+
+    <div class="output-area">
+      <div class="tab-content active" id="tab-preview">
+        <div id="previewWrap">
+          <div class="empty-state" id="emptyState">← load an image to begin</div>
+          <div id="preview"></div>
+        </div>
+      </div>
+      <div class="tab-content" id="tab-snippet">
+        <div id="snippetWrap">
+          <textarea id="snippet" readonly></textarea>
+          <div class="snippet-footer">
+            <span class="file-size" id="fileSize"></span>
+            <button class="copy-btn" id="copyBtn">⧉ copy html snippet</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ─── ANSI Palettes ───────────────────────────────────────────
+const ANSI16 = [
+  [0,0,0],[128,0,0],[0,128,0],[128,128,0],[0,0,128],[128,0,128],[0,128,128],[192,192,192],
+  [128,128,128],[255,0,0],[0,255,0],[255,255,0],[0,0,255],[255,0,255],[0,255,255],[255,255,255]
+];
+
+const ANSI256 = (() => {
+  const p = [...ANSI16];
+  // 216 color cube
+  for (let r = 0; r < 6; r++)
+    for (let g = 0; g < 6; g++)
+      for (let b = 0; b < 6; b++)
+        p.push([r ? 55 + r * 40 : 0, g ? 55 + g * 40 : 0, b ? 55 + b * 40 : 0]);
+  // 24 grays
+  for (let i = 0; i < 24; i++) { const v = 8 + i * 10; p.push([v, v, v]); }
+  return p;
+})();
+
+// ─── Nearest color search ────────────────────────────────────
+function nearestColor(r, g, b, palette) {
+  let best = 0, bestD = Infinity;
+  for (let i = 0; i < palette.length; i++) {
+    const dr = r - palette[i][0], dg = g - palette[i][1], db = b - palette[i][2];
+    const d = dr*dr + dg*dg + db*db;
+    if (d < bestD) { bestD = d; best = i; }
+  }
+  return palette[best];
+}
+
+// ─── Mono mapping ────────────────────────────────────────────
+const MONO_COLORS = {
+  'mono-green': [57, 255, 20],
+  'mono-amber': [255, 171, 0],
+  'mono-cyan':  [0, 229, 255],
+  'mono-white': [236, 239, 241],
+};
+
+function monoMap(r, g, b, tint) {
+  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+  const f = lum / 255;
+  return [Math.round(tint[0]*f), Math.round(tint[1]*f), Math.round(tint[2]*f)];
+}
+
+// ─── Quantize color by palette setting ───────────────────────
+function quantize(r, g, b, palette) {
+  if (palette === 'truecolor') return [r, g, b];
+  if (palette === 'ansi256') return nearestColor(r, g, b, ANSI256);
+  if (palette === 'ansi16') return nearestColor(r, g, b, ANSI16);
+  if (palette.startsWith('mono-')) return monoMap(r, g, b, MONO_COLORS[palette]);
+  return [r, g, b];
+}
+
+// ─── Floyd-Steinberg dithering ───────────────────────────────
+function ditherImage(pixels, w, h, paletteName) {
+  // pixels: Float64Array of [r,g,b,...] row-major, length = w*h*3
+  const buf = new Float64Array(pixels);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = (y * w + x) * 3;
+      const or = buf[i], og = buf[i+1], ob = buf[i+2];
+      const [nr, ng, nb] = quantize(
+        Math.max(0, Math.min(255, Math.round(or))),
+        Math.max(0, Math.min(255, Math.round(og))),
+        Math.max(0, Math.min(255, Math.round(ob))),
+        paletteName
+      );
+      buf[i] = nr; buf[i+1] = ng; buf[i+2] = nb;
+      const er = or - nr, eg = og - ng, eb = ob - nb;
+      const spread = (dx, dy, f) => {
+        const nx = x + dx, ny = y + dy;
+        if (nx >= 0 && nx < w && ny < h) {
+          const j = (ny * w + nx) * 3;
+          buf[j] += er * f;
+          buf[j+1] += eg * f;
+          buf[j+2] += eb * f;
+        }
+      };
+      spread(1, 0, 7/16);
+      spread(-1, 1, 3/16);
+      spread(0, 1, 5/16);
+      spread(1, 1, 1/16);
+    }
+  }
+  return buf;
+}
+
+// ─── ASCII ramp ──────────────────────────────────────────────
+const ASCII_RAMP = ' .\'`^",:;Il!i><~+_-?][}{1)(|\\/tfjrxnuvczXYUJCLQ0OZmwqpdbkhao*#MW&8%B@$';
+
+function luminance(r, g, b) {
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
+// ─── Block shading ───────────────────────────────────────────
+const BLOCK_CHARS = [' ', '░', '▒', '▓', '█'];
+
+// ─── Braille mapping ─────────────────────────────────────────
+// Braille dot positions for 2×4 grid:
+// (0,0)=0x01 (1,0)=0x08
+// (0,1)=0x02 (1,1)=0x10
+// (0,2)=0x04 (1,2)=0x20
+// (0,3)=0x40 (1,3)=0x80
+const BRAILLE_BASE = 0x2800;
+const BRAILLE_MAP = [
+  [0x01, 0x08],
+  [0x02, 0x10],
+  [0x04, 0x20],
+  [0x40, 0x80]
+];
+
+// ─── Main state ──────────────────────────────────────────────
+let loadedImage = null;
+
+const $ = id => document.getElementById(id);
+const canvas = $('canvas');
+const ctx = canvas.getContext('2d', { willReadFrequently: true });
+
+// ─── Image loading ───────────────────────────────────────────
+function loadImage(file) {
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = () => {
+    loadedImage = img;
+    $('filename').value = file.name;
+    $('loadedInfo').textContent = `✓ ${file.name} (${img.naturalWidth}×${img.naturalHeight})`;
+    $('dropzone').classList.add('has-image');
+    URL.revokeObjectURL(url);
+    render();
+  };
+  img.src = url;
+}
+
+// Drag & drop
+const dz = $('dropzone');
+dz.addEventListener('click', () => $('fileInput').click());
+$('fileInput').addEventListener('change', e => { if (e.target.files[0]) loadImage(e.target.files[0]); });
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('over'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('over'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('over');
+  const f = e.dataTransfer.files[0];
+  if (f && f.type.startsWith('image/')) loadImage(f);
+});
+
+// Tabs
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    $('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// Copy
+$('copyBtn').addEventListener('click', () => {
+  navigator.clipboard.writeText($('snippet').value).then(() => {
+    $('copyBtn').textContent = '✓ copied!';
+    setTimeout(() => $('copyBtn').textContent = '⧉ copy html snippet', 1500);
+  });
+});
+
+// Controls re-render
+['mode','width','palette','dither','border','scanlines','showFilename','filename'].forEach(id => {
+  $(id).addEventListener('change', () => render());
+  $(id).addEventListener('input', () => { clearTimeout($(id)._t); $(id)._t = setTimeout(render, 200); });
+});
+
+// ─── Hex color helper ────────────────────────────────────────
+function toHex(r, g, b) {
+  return '#' + ((1 << 24) | (r << 16) | (g << 8) | b).toString(16).slice(1);
+}
+
+// ─── Render engine ───────────────────────────────────────────
+function render() {
+  if (!loadedImage) return;
+  $('emptyState').style.display = 'none';
+
+  const mode = $('mode').value;
+  const cols = parseInt($('width').value) || 80;
+  const paletteName = $('palette').value;
+  const useDither = $('dither').checked;
+  const useBorder = $('border').checked;
+  const useScanlines = $('scanlines').checked;
+  const showFn = $('showFilename').checked;
+  const fname = $('filename').value || 'image.png';
+
+  const img = loadedImage;
+  const aspect = img.naturalHeight / img.naturalWidth;
+
+  // Determine pixel grid size depending on mode
+  let pixW, pixH;
+  if (mode === 'halfblock') {
+    pixW = cols;
+    pixH = Math.round(cols * aspect);
+    if (pixH % 2 !== 0) pixH++;
+  } else if (mode === 'braille') {
+    pixW = cols * 2;
+    pixH = Math.round((cols * 2) * aspect);
+    // round to multiple of 4
+    pixH = Math.ceil(pixH / 4) * 4;
+  } else {
+    // ascii, block: 1 char = 1 pixel, but chars are ~2:1 aspect
+    pixW = cols;
+    pixH = Math.round(cols * aspect * 0.5);
+  }
+
+  canvas.width = pixW;
+  canvas.height = pixH;
+  ctx.drawImage(img, 0, 0, pixW, pixH);
+  const imageData = ctx.getImageData(0, 0, pixW, pixH);
+  const data = imageData.data;
+
+  // Build pixel buffer (r,g,b float)
+  const pixels = new Float64Array(pixW * pixH * 3);
+  for (let i = 0; i < pixW * pixH; i++) {
+    pixels[i*3]   = data[i*4];
+    pixels[i*3+1] = data[i*4+1];
+    pixels[i*3+2] = data[i*4+2];
+  }
+
+  // Dither if needed
+  let processed;
+  if (useDither && paletteName !== 'truecolor') {
+    processed = ditherImage(pixels, pixW, pixH, paletteName);
+  } else {
+    // Quantize without dithering
+    processed = new Float64Array(pixels.length);
+    for (let i = 0; i < pixW * pixH; i++) {
+      const [r, g, b] = quantize(
+        Math.round(pixels[i*3]),
+        Math.round(pixels[i*3+1]),
+        Math.round(pixels[i*3+2]),
+        paletteName
+      );
+      processed[i*3] = r;
+      processed[i*3+1] = g;
+      processed[i*3+2] = b;
+    }
+  }
+
+  // Get pixel helper
+  const px = (x, y) => {
+    const i = (y * pixW + x) * 3;
+    return [
+      Math.max(0, Math.min(255, Math.round(processed[i]))),
+      Math.max(0, Math.min(255, Math.round(processed[i+1]))),
+      Math.max(0, Math.min(255, Math.round(processed[i+2])))
+    ];
+  };
+
+  // ── Build cell data: array of rows, each row = array of {fg, bg, ch} ──
+  // fg/bg are hex strings, bg may be null (for fg-only modes)
+  const cellRows = [];
+
+  if (mode === 'halfblock') {
+    const rows = pixH / 2;
+    for (let row = 0; row < rows; row++) {
+      const cells = [];
+      for (let x = 0; x < pixW; x++) {
+        const [tr, tg, tb] = px(x, row * 2);
+        const [br, bg2, bb] = px(x, row * 2 + 1);
+        cells.push({ fg: toHex(br, bg2, bb), bg: toHex(tr, tg, tb), ch: '▄' });
+      }
+      cellRows.push(cells);
+    }
+  } else if (mode === 'braille') {
+    const cellsX = pixW / 2;
+    const cellsY = pixH / 4;
+    for (let cy = 0; cy < cellsY; cy++) {
+      const cells = [];
+      for (let cx = 0; cx < cellsX; cx++) {
+        let code = 0;
+        let totalR = 0, totalG = 0, totalB = 0, count = 0;
+        for (let dy = 0; dy < 4; dy++) {
+          for (let dx = 0; dx < 2; dx++) {
+            const [r, g, b] = px(cx * 2 + dx, cy * 4 + dy);
+            if (luminance(r, g, b) > 128) code |= BRAILLE_MAP[dy][dx];
+            totalR += r; totalG += g; totalB += b; count++;
+          }
+        }
+        const ar = Math.round(totalR / count);
+        const ag = Math.round(totalG / count);
+        const ab = Math.round(totalB / count);
+        cells.push({ fg: toHex(ar, ag, ab), bg: null, ch: String.fromCharCode(BRAILLE_BASE + code) });
+      }
+      cellRows.push(cells);
+    }
+  } else if (mode === 'ascii') {
+    for (let y = 0; y < pixH; y++) {
+      const cells = [];
+      for (let x = 0; x < pixW; x++) {
+        const [r, g, b] = px(x, y);
+        const lum = luminance(r, g, b);
+        const idx = Math.min(ASCII_RAMP.length - 1, Math.floor(lum / 255 * (ASCII_RAMP.length - 1)));
+        const ch = ASCII_RAMP[idx] === ' ' ? '\u00a0' : ASCII_RAMP[idx];
+        cells.push({ fg: toHex(r, g, b), bg: null, ch });
+      }
+      cellRows.push(cells);
+    }
+  } else if (mode === 'block') {
+    for (let y = 0; y < pixH; y++) {
+      const cells = [];
+      for (let x = 0; x < pixW; x++) {
+        const [r, g, b] = px(x, y);
+        const lum = luminance(r, g, b);
+        const idx = Math.min(BLOCK_CHARS.length - 1, Math.floor(lum / 255 * BLOCK_CHARS.length));
+        const ch = BLOCK_CHARS[idx] === ' ' ? '\u00a0' : BLOCK_CHARS[idx];
+        cells.push({ fg: toHex(r, g, b), bg: null, ch });
+      }
+      cellRows.push(cells);
+    }
+  }
+
+  // ── Build deduplicated color palette & class map ──
+  const fgMap = new Map(); // hex -> class index
+  const bgMap = new Map();
+  let fgIdx = 0, bgIdx = 0;
+
+  const getFgClass = (hex) => {
+    if (!fgMap.has(hex)) fgMap.set(hex, fgIdx++);
+    return 'f' + fgMap.get(hex);
+  };
+  const getBgClass = (hex) => {
+    if (!bgMap.has(hex)) bgMap.set(hex, bgIdx++);
+    return 'g' + bgMap.get(hex);
+  };
+
+  // Border classes (reserved)
+  const borderFgCls = useBorder ? getFgClass('#3a5a3a') : '';
+  const filenameFgCls = (useBorder && showFn) ? getFgClass('#39ff14') : '';
+
+  // ── Convert cellRows to RLE-compressed span lines ──
+  // Each span: {classes, chars} where chars can be multiple identical or
+  // for braille/ascii runs with same color
+  let lines = [];
+
+  for (const row of cellRows) {
+    const spans = [];
+    let cur = null; // {fg, bg, chars}
+
+    for (const cell of row) {
+      const canMerge = cur
+        && cur.fg === cell.fg
+        && cur.bg === cell.bg
+        && cur.ch === cell.ch;
+
+      if (canMerge) {
+        cur.count++;
+      } else {
+        if (cur) spans.push(cur);
+        cur = { fg: cell.fg, bg: cell.bg, ch: cell.ch, count: 1 };
+      }
+    }
+    if (cur) spans.push(cur);
+
+    let line = '';
+    for (const s of spans) {
+      const fc = getFgClass(s.fg);
+      const bc = s.bg ? ' ' + getBgClass(s.bg) : '';
+      const txt = s.ch.repeat(s.count);
+      const escapedTxt = (mode === 'ascii' || mode === 'block')
+        ? escapeHtml(txt).replace(/\u00a0/g, '&nbsp;')
+        : txt;
+      line += `<span class="${fc}${bc}">${escapedTxt}</span>`;
+    }
+    lines.push(line);
+  }
+
+  // ── Border frame ──
+  if (useBorder) {
+    const innerW = mode === 'braille' ? pixW / 2 : pixW;
+    const top = '┌' + '─'.repeat(innerW) + '┐';
+    const bot = '└' + '─'.repeat(innerW) + '┘';
+
+    let topLine = `<span class="${borderFgCls}">${top}</span>`;
+    if (showFn) {
+      const label = ` ${fname} `;
+      const maxLabel = Math.min(label.length, innerW - 2);
+      const trimLabel = label.slice(0, maxLabel);
+      topLine = `<span class="${borderFgCls}">┌─</span><span class="${filenameFgCls}">${escapeHtml(trimLabel)}</span><span class="${borderFgCls}">${'─'.repeat(Math.max(0, innerW - 1 - maxLabel))}┐</span>`;
+    }
+
+    lines = lines.map(l => `<span class="${borderFgCls}">│</span>${l}<span class="${borderFgCls}">│</span>`);
+    lines.unshift(topLine);
+    lines.push(`<span class="${borderFgCls}">${bot}</span>`);
+  }
+
+  // ── Build CSS class stylesheet ──
+  let css = '';
+  for (const [hex, idx] of fgMap) css += `.f${idx}{color:${hex}}`;
+  for (const [hex, idx] of bgMap) css += `.g${idx}{background:${hex}}`;
+
+  const linesHtml = lines.join('\n');
+
+  const scanlineCSS = useScanlines
+    ? 'background-image:repeating-linear-gradient(0deg,transparent,transparent 1px,rgba(0,0,0,0.25) 1px,rgba(0,0,0,0.25) 2px);background-size:100% 2px;'
+    : '';
+
+  const wrapperStyle = `font-family:'JetBrains Mono',monospace;font-size:8px;line-height:1;white-space:pre;letter-spacing:0;background:#0a0e14;display:inline-block;padding:8px;${scanlineCSS}`;
+
+  const fullSnippet = `<style>${css}</style><div style="${wrapperStyle}">${linesHtml}</div>`;
+
+  // ── Update preview (inject style + html) ──
+  const previewEl = $('preview');
+  previewEl.innerHTML = `<style>${css}</style>${linesHtml}`;
+  if (useScanlines) {
+    previewEl.style.backgroundImage = 'repeating-linear-gradient(0deg,transparent,transparent 1px,rgba(0,0,0,0.25) 1px,rgba(0,0,0,0.25) 2px)';
+    previewEl.style.backgroundSize = '100% 2px';
+  } else {
+    previewEl.style.backgroundImage = 'none';
+  }
+
+  // Update snippet
+  $('snippet').value = fullSnippet;
+
+  // Update file size indicator
+  const bytes = new Blob([fullSnippet]).size;
+  const sizeStr = bytes < 1024 ? bytes + ' B'
+    : bytes < 1048576 ? (bytes / 1024).toFixed(1) + ' KB'
+    : (bytes / 1048576).toFixed(2) + ' MB';
+  $('fileSize').textContent = sizeStr;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
